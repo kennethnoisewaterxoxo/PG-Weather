@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skew-T Log-P Diagram Visualizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.8;
+        }
+
+        .controls {
+            padding: 25px 30px;
+            background: #f7fafc;
+            border-bottom: 2px solid #e2e8f0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: flex-end;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-height: 68px;
+            justify-content: flex-end;
+        }
+
+        .control-group label {
+            font-weight: 600;
+            color: #2d3748;
+            font-size: 0.9em;
+            min-height: 16px;
+        }
+
+        .control-group input,
+        .control-group select {
+            padding: 10px 15px;
+            border: 2px solid #cbd5e0;
+            border-radius: 6px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+            height: 44px;
+        }
+
+        .control-group input:focus,
+        .control-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            padding: 10px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            height: 44px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .info-panel {
+            background: #edf2f7;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .info-panel.active {
+            display: block;
+        }
+
+        .info-panel h3 {
+            color: #2d3748;
+            margin-bottom: 10px;
+        }
+
+        .info-panel .metadata {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            color: #4a5568;
+        }
+
+        .info-panel .metadata span {
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .canvas-container {
+            position: relative;
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+            cursor: crosshair;
+        }
+
+        .cursor-info {
+            position: absolute;
+            background: rgba(45, 55, 72, 0.95);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            pointer-events: none;
+            display: none;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            min-width: 200px;
+        }
+
+        .cursor-info.active {
+            display: block;
+        }
+
+        .cursor-info .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 4px 0;
+            gap: 20px;
+        }
+
+        .cursor-info .info-label {
+            color: #cbd5e0;
+            font-weight: 600;
+        }
+
+        .cursor-info .info-value {
+            color: white;
+            font-weight: bold;
+            text-align: right;
+        }
+
+        .cursor-info .divider {
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            margin: 6px 0;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #718096;
+            display: none;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .loading-spinner {
+            border: 4px solid #e2e8f0;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .error.active {
+            display: block;
+        }
+
+        .help-text {
+            font-size: 0.85em;
+            color: #718096;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Skew-T Log-P Diagram Visualizer</h1>
+            <p>Atmospheric Sounding Analysis Tool</p>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="station">Station</label>
+                <select id="station">
+                    <optgroup label="Canada">
+                        <option value="71043">Alert, NU (Arctic)</option>
+                        <option value="71109">Resolute, NU</option>
+                        <option value="71913">Churchill, MB</option>
+                        <option value="71924">The Pas, MB</option>
+                        <option value="71934">Winnipeg, MB</option>
+                        <option value="71816">Edmonton, AB</option>
+                        <option value="71119">Calgary, AB</option>
+                        <option value="71203">Fort Nelson, BC</option>
+                        <option value="71908">Prince George, BC</option>
+                        <option value="71892">Kelowna, BC</option>
+                        <option value="71203">Kamloops, BC</option>
+                        <option value="73033" selected>Vernon, BC</option>
+                        <option value="71892">Penticton, BC</option>
+                        <option value="71203">Vancouver, BC</option>
+                        <option value="71836">Victoria, BC</option>
+                        <option value="70261">Eureka, NU (High Arctic)</option>
+                    </optgroup>
+                    <optgroup label="United States - West">
+                        <option value="72797">Seattle, WA</option>
+                        <option value="72694">Spokane, WA</option>
+                        <option value="72572">Portland, OR</option>
+                        <option value="72493">Boise, ID</option>
+                        <option value="72572">Medford, OR</option>
+                        <option value="72340">Oakland, CA</option>
+                        <option value="72293">Sacramento, CA</option>
+                        <option value="72376">San Diego, CA</option>
+                        <option value="72293">San Francisco, CA</option>
+                        <option value="72489">Santa Barbara, CA</option>
+                        <option value="72393">Las Vegas, NV</option>
+                        <option value="72572">Reno, NV</option>
+                        <option value="72572">Flagstaff, AZ</option>
+                        <option value="72274">Phoenix, AZ</option>
+                        <option value="72493">Tucson, AZ</option>
+                        <option value="72572">Salt Lake City, UT</option>
+                    </optgroup>
+                    <optgroup label="United States - Central">
+                        <option value="72469">Denver, CO</option>
+                        <option value="72562">Grand Junction, CO</option>
+                        <option value="72572">Albuquerque, NM</option>
+                        <option value="72518">Cheyenne, WY</option>
+                        <option value="72662">Rapid City, SD</option>
+                        <option value="72764">Bismarck, ND</option>
+                        <option value="72518">North Platte, NE</option>
+                        <option value="72456">Dodge City, KS</option>
+                        <option value="72353">Oklahoma City, OK</option>
+                        <option value="72249">Midland, TX</option>
+                        <option value="72251">Del Rio, TX</option>
+                        <option value="72240">Corpus Christi, TX</option>
+                        <option value="72250">Brownsville, TX</option>
+                    </optgroup>
+                    <optgroup label="United States - Midwest & East">
+                        <option value="72645">Minneapolis, MN</option>
+                        <option value="72440">Green Bay, WI</option>
+                        <option value="72518">Chicago, IL</option>
+                        <option value="72327">Peoria, IL</option>
+                        <option value="72340">St. Louis, MO</option>
+                        <option value="72327">Springfield, MO</option>
+                        <option value="72230">Little Rock, AR</option>
+                        <option value="72233">Jackson, MS</option>
+                        <option value="72235">Lake Charles, LA</option>
+                        <option value="72233">Shreveport, LA</option>
+                        <option value="72340">Detroit, MI</option>
+                        <option value="72426">Indianapolis, IN</option>
+                        <option value="72421">Dayton, OH</option>
+                        <option value="72327">Pittsburgh, PA</option>
+                        <option value="72518">Buffalo, NY</option>
+                        <option value="72518">Albany, NY</option>
+                        <option value="72518">Chatham, MA</option>
+                        <option value="72518">Portland, ME</option>
+                    </optgroup>
+                    <optgroup label="United States - South & Southeast">
+                        <option value="72327">Nashville, TN</option>
+                        <option value="72327">Huntsville, AL</option>
+                        <option value="72340">Birmingham, AL</option>
+                        <option value="72206">Atlanta, GA</option>
+                        <option value="72215">Jacksonville, FL</option>
+                        <option value="72210">Tampa, FL</option>
+                        <option value="72572">Miami, FL</option>
+                        <option value="72201">Key West, FL</option>
+                        <option value="72327">Charleston, SC</option>
+                        <option value="72317">Greensboro, NC</option>
+                        <option value="72318">Wallops Island, VA</option>
+                        <option value="72403">Washington DC (Dulles)</option>
+                        <option value="72528">New York City, NY</option>
+                    </optgroup>
+                    <optgroup label="Alaska & Hawaii">
+                        <option value="70273">Barrow, AK (Arctic)</option>
+                        <option value="70326">Fairbanks, AK</option>
+                        <option value="70261">Anchorage, AK</option>
+                        <option value="70200">Juneau, AK</option>
+                        <option value="91285">Hilo, HI</option>
+                        <option value="91165">Honolulu, HI</option>
+                        <option value="91285">Lihue, HI</option>
+                    </optgroup>
+                </select>
+                <div class="help-text">Select weather station</div>
+            </div>
+
+            <div class="control-group">
+                <label for="date">Date</label>
+                <input type="date" id="date">
+            </div>
+
+            <div class="control-group">
+                <label for="hour">Hour (UTC)</label>
+                <select id="hour">
+                    <option value="00">00 UTC</option>
+                    <option value="12">12 UTC</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>&nbsp;</label>
+                <button id="loadBtn">Load Sounding</button>
+            </div>
+
+            <div style="width: 100%; border-top: 1px solid #cbd5e0; margin: 10px 0;"></div>
+
+            <div class="control-group">
+                <label for="minHeight">Min Height (m)</label>
+                <input type="number" id="minHeight" value="0" min="0" max="30000" step="100">
+                <div class="help-text">Minimum elevation</div>
+            </div>
+
+            <div class="control-group">
+                <label for="maxHeight">Max Height (m)</label>
+                <input type="number" id="maxHeight" value="4500" min="0" max="30000" step="100">
+                <div class="help-text">Maximum elevation</div>
+            </div>
+
+            <div class="control-group">
+                <label>&nbsp;</label>
+                <button id="zoomBtn">Apply Zoom</button>
+            </div>
+
+            <div class="control-group">
+                <label>&nbsp;</label>
+                <button id="resetZoomBtn" style="background: linear-gradient(135deg, #718096 0%, #4a5568 100%);">Reset Zoom</button>
+            </div>
+        </div>
+
+        <div class="content">
+            <div id="infoPanel" class="info-panel">
+                <h3>Sounding Information</h3>
+                <div class="metadata">
+                    <div><span>Station:</span> <span id="stationInfo">-</span></div>
+                    <div><span>Location:</span> <span id="locationInfo">-</span></div>
+                    <div><span>Time:</span> <span id="timeInfo">-</span></div>
+                    <div><span>Elevation:</span> <span id="elevationInfo">-</span></div>
+                </div>
+            </div>
+
+            <div id="loading" class="loading">
+                <div class="loading-spinner"></div>
+                <p>Loading sounding data...</p>
+            </div>
+
+            <div id="error" class="error"></div>
+
+            <div class="canvas-container">
+                <canvas id="skewt" width="1200" height="900"></canvas>
+                <div id="cursorInfo" class="cursor-info">
+                    <div class="info-row">
+                        <span class="info-label">Height:</span>
+                        <span class="info-value" id="cursorHeight">-</span>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="info-row">
+                        <span class="info-label">Temperature:</span>
+                        <span class="info-value" id="cursorTemp">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Dew Point:</span>
+                        <span class="info-value" id="cursorDewpoint">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Wind Speed:</span>
+                        <span class="info-value" id="cursorWind">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Wind Dir:</span>
+                        <span class="info-value" id="cursorWindDir">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Pressure:</span>
+                        <span class="info-value" id="cursorPressure">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="dataParser.js"></script>
+    <script src="skewt.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
