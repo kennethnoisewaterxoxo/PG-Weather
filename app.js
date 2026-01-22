@@ -487,9 +487,9 @@ class SoundingApp {
 
         this.cursorPressure.textContent = !isNaN(data.pressure) ? `${data.pressure.toFixed(1)} mb` : 'N/A';
 
-        // Position tooltip closer to cursor
-        const offsetX = 8;
-        const offsetY = 8;
+        // Position tooltip right next to cursor
+        const offsetX = 10;
+        const offsetY = -5;
         this.cursorInfo.style.left = (mouseX + offsetX) + 'px';
         this.cursorInfo.style.top = (mouseY + offsetY) + 'px';
 
