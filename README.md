@@ -80,6 +80,7 @@ A professional web-based atmospheric sounding visualizer that displays Skew-T Lo
 - `app.js` - Application controller and data fetching
 - `dataParser.js` - Parser for UW Wyoming sounding format
 - `skewt.js` - Skew-T diagram rendering engine
+- `cloudflare-worker/` - CORS proxy Worker for fetching UWyo data
 
 ### Data Source
 
@@ -95,7 +96,7 @@ Works in all modern browsers:
 
 ### CORS Handling
 
-The application attempts direct fetch first, then falls back to a CORS proxy if needed. This ensures data can be loaded across different browsers and configurations.
+UWyo doesn't send CORS headers, so the browser needs a proxy to read its data. The app first uses your own Cloudflare Worker (set `SOUNDING_PROXY_URL` at the top of `app.js`; see [`cloudflare-worker/README.md`](cloudflare-worker/README.md)). If that fails, it tries a direct fetch, then the public proxies allorigins.win and corsproxy.io. If every source fails, the error message lists why each one failed.
 
 ## Meteorological Applications
 

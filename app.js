@@ -2,6 +2,11 @@
  * Main Application Controller
  */
 
+// URL of your deployed Cloudflare Worker proxy, e.g.
+// 'https://pg-weather-proxy.<your-subdomain>.workers.dev'.
+// Leave empty to fall back to the public CORS proxies. See cloudflare-worker/README.md.
+const SOUNDING_PROXY_URL = '';
+
 class SoundingApp {
     constructor() {
         this.diagram = new SkewTDiagram('skewt');
@@ -118,54 +123,44 @@ class SoundingApp {
     }
 
     /**
-     * Fetch sounding data with timeout
+     * Fetch sounding data with timeout.
+     * UWyo sends no CORS headers, so the browser needs a proxy. Sources are
+     * tried in order and every failure reason is kept for the error message.
      */
     async fetchData(url) {
         const timeout = 30000; // 30 second timeout
 
-        // Helper to create timeout promise
-        const fetchWithTimeout = (fetchUrl, timeoutMs) => {
-            return Promise.race([
-                fetch(fetchUrl),
-                new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Request timeout')), timeoutMs)
-                )
-            ]);
-        };
+        const sources = [];
+        if (SOUNDING_PROXY_URL) {
+            // Our own Cloudflare Worker (see cloudflare-worker/); takes the UWyo query string as-is
+            sources.push({ name: 'Cloudflare Worker', url: `${SOUNDING_PROXY_URL.replace(/\/+$/, '')}/?${new URL(url).searchParams.toString()}` });
+        }
+        sources.push(
+            { name: 'direct', url },
+            { name: 'allorigins.win', url: `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}` },
+            { name: 'corsproxy.io', url: `https://corsproxy.io/?${encodeURIComponent(url)}` }
+        );
 
-        // Try direct fetch first (may fail due to CORS)
-        try {
-            const response = await fetchWithTimeout(url, timeout);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return await response.text();
-        } catch (error) {
-            console.log('Direct fetch failed, trying CORS proxy...');
-
-            // Try first CORS proxy
+        const failures = [];
+        for (const source of sources) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeout);
             try {
-                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-                const response = await fetchWithTimeout(proxyUrl, timeout);
+                const response = await fetch(source.url, { signal: controller.signal });
                 if (!response.ok) {
-                    throw new Error(`Proxy returned ${response.status}`);
+                    throw new Error(`HTTP ${response.status}`);
                 }
                 return await response.text();
-            } catch (proxyError) {
-                // Try alternative CORS proxy
-                console.log('First proxy failed, trying alternative...');
-                try {
-                    const altProxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-                    const response = await fetchWithTimeout(altProxyUrl, timeout);
-                    if (!response.ok) {
-                        throw new Error(`Alternative proxy returned ${response.status}`);
-                    }
-                    return await response.text();
-                } catch (altError) {
-                    throw new Error('Data unavailable. Try: (1) Use yesterday\'s date, (2) Try a different station, or (3) Check if data exists for this date/time.');
-                }
+            } catch (error) {
+                const reason = error.name === 'AbortError' ? 'timed out' : error.message;
+                console.warn(`Fetch via ${source.name} failed: ${reason}`);
+                failures.push(`${source.name}: ${reason}`);
+            } finally {
+                clearTimeout(timer);
             }
         }
+
+        throw new Error(`Data unavailable (${failures.join('; ')}).`);
     }
 
     /**
