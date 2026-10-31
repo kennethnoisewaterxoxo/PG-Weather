@@ -148,7 +148,10 @@ class SoundingApp {
             try {
                 const response = await fetch(source.url, { signal: controller.signal });
                 if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
+                    // Plain-text bodies (e.g. from our Worker) explain the failure; skip HTML error pages
+                    const isText = (response.headers.get('Content-Type') || '').startsWith('text/plain');
+                    const detail = isText ? (await response.text().catch(() => '')).trim().slice(0, 200) : '';
+                    throw new Error(`HTTP ${response.status}${detail ? ` - ${detail}` : ''}`);
                 }
                 return await response.text();
             } catch (error) {

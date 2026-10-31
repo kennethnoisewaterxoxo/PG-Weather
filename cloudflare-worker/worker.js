@@ -48,23 +48,55 @@ export default {
 
         const upstreamUrl = `${UPSTREAM}?${params.toString()}`;
 
-        let upstream;
-        try {
-            upstream = await fetch(upstreamUrl, {
-                headers: { 'User-Agent': 'PG-Weather Skew-T viewer (Cloudflare Worker)' },
-                cf: { cacheTtl: CACHE_SECONDS, cacheEverything: true }
-            });
-        } catch (error) {
-            return new Response(`Upstream fetch failed: ${error.message}`, {
-                status: 502,
-                headers: corsHeaders
-            });
+        // Only real sounding data is cached. UWyo sometimes answers with a short
+        // "The server is too busy" page, which must not be cached or passed off as data.
+        const cache = caches.default;
+        const cacheKey = new Request(`https://cache.pg-weather/?${params.toString()}`);
+        const cached = await cache.match(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
+        let body = '';
+        let status = 502;
+        for (let attempt = 0; attempt < 2; attempt++) {
+            if (attempt > 0) {
+                await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+            try {
+                const upstream = await fetch(upstreamUrl, {
+                    headers: { 'User-Agent': 'PG-Weather Skew-T viewer (Cloudflare Worker)' }
+                });
+                status = upstream.status;
+                body = await upstream.text();
+            } catch (error) {
+                status = 502;
+                body = `Upstream fetch failed: ${error.message}`;
+            }
+            if (isSoundingData(status, body)) {
+                break;
+            }
         }
 
         const headers = new Headers(corsHeaders);
-        headers.set('Content-Type', upstream.headers.get('Content-Type') || 'text/plain; charset=utf-8');
-        headers.set('Cache-Control', `public, max-age=${CACHE_SECONDS}`);
+        headers.set('Content-Type', 'text/plain; charset=utf-8');
 
-        return new Response(upstream.body, { status: upstream.status, headers });
+        if (!isSoundingData(status, body)) {
+            headers.set('Cache-Control', 'no-store');
+            const reason = body.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+            return new Response(`UWyo did not return sounding data (HTTP ${status}): ${reason}`, {
+                status: status >= 400 ? status : 503,
+                headers
+            });
+        }
+
+        headers.set('Cache-Control', `public, max-age=${CACHE_SECONDS}`);
+        const response = new Response(body, { status: 200, headers });
+        ctx.waitUntil(cache.put(cacheKey, response.clone()));
+        return response;
     }
 };
+
+function isSoundingData(status, body) {
+    return status === 200 && body.includes('PRES') && body.includes('HGHT') && body.includes('TEMP');
+}
