@@ -5,7 +5,7 @@
 // URL of your deployed Cloudflare Worker proxy, e.g.
 // 'https://pg-weather-proxy.<your-subdomain>.workers.dev'.
 // Leave empty to fall back to the public CORS proxies. See cloudflare-worker/README.md.
-const SOUNDING_PROXY_URL = '';
+const SOUNDING_PROXY_URL = 'https://pg-weather-proxy.ptr-lister.workers.dev';
 
 class SoundingApp {
     constructor() {
